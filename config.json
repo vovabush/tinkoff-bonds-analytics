@@ -1,0 +1,8 @@
+{
+    "TOKEN": "",
+    "API_DELAY": 0.7,
+    "EXCEL_TABLE_NAME": "bonds.xlsx",
+    "FOR_QUAL_INVESTOR": false,
+    "AMORTIZATION": false,
+    "FLOATING_COUPON": false
+}
