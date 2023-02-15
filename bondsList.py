@@ -17,8 +17,8 @@ TOKEN = ""
 API_DELAY = 0.5
 EXCEL_TABLE_NAME = None
 FOR_QUAL_INVESTOR = None
-AMORTIZATION = None
-FLOATING_COUPON = None
+AMORTIZATION = False
+FLOATING_COUPON = False
 DIV = 1000000000
 REQUEST_TO_AKRA = {"text": "",
                    "sectors": [],
@@ -301,8 +301,8 @@ def parse_parameters_from_config():
             API_DELAY = config["API_DELAY"]
             EXCEL_TABLE_NAME = config["EXCEL_TABLE_NAME"]
             FOR_QUAL_INVESTOR = config["FOR_QUAL_INVESTOR"]
-            AMORTIZATION = config["AMORTIZATION"]
-            FLOATING_COUPON = config["FLOATING_COUPON"]
+            # AMORTIZATION = config["AMORTIZATION"]
+            # FLOATING_COUPON = config["FLOATING_COUPON"]
     except Exception as e:
         raise ValueError("parse_parameters_from_config::" + "Проблема чтения конфигурации: " + str(e))
 
