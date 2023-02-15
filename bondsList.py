@@ -32,6 +32,7 @@ REQUEST_TO_AKRA = {"text": "",
                    "page": 1,
                    "sort": "",
                    "count": "1500"}
+START_TIME = None
 
 
 class Bond:
@@ -162,6 +163,8 @@ def is_available_bond(bond):
 
 
 def print_progress_bar(iteration, total):
+    global START_TIME
+
     prefix = 'Прогресс:'
     suffix = 'Готово'
     fill = '█'
@@ -174,7 +177,9 @@ def print_progress_bar(iteration, total):
     print(f'\r{prefix} |{bar}| {percent}% {suffix}', end=printEnd)
     # Print New Line on Complete
     if iteration == total:
-        print()
+        print("\nВремя работы: " + str(datetime.now() - START_TIME).split('.', 2)[0])
+    elif iteration == 0:
+        START_TIME = datetime.now()
 
 
 def download_bonds_info(governmentBondObjects, corporateBondsObjects):
