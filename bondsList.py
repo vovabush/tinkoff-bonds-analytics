@@ -4,6 +4,8 @@ import json
 import xlsxwriter
 import requests
 import urllib.parse
+import os
+import pandas
 
 from datetime import datetime, timezone, timedelta
 from subprocess import Popen
@@ -33,6 +35,7 @@ REQUEST_TO_AKRA = {"text": "",
                    "sort": "",
                    "count": "1500"}
 START_TIME = None
+FILENAME_FOR_NRA_OUTPUT = "current-ratings.xlsx"
 
 
 class Bond:
@@ -68,7 +71,8 @@ class Bond:
         self.duration = round((self.duration + nominal * self.years_before_maturity) / common_income, 2)
 
         try:
-            self.rating = get_acra_rating_by_isin(bond_desc.isin)
+            self.rating_acra = get_acra_rating_by_isin(bond_desc.isin)
+            self.rating_nra = get_NRA_rating_by_isin(bond_desc.isin)
         except Exception as e:
             raise ValueError("Bond.__init__::" + str(e))
 
@@ -99,8 +103,57 @@ class Bond:
     def get_duration(self):
         return self.duration
 
-    def get_rating(self):
-        return self.rating
+    def get_acra_rating(self):
+        return self.rating_acra
+
+    def get_nra_rating(self):
+        return self.rating_nra
+
+
+def get_NRA_rating_by_isin(isin):
+    data_to_nra = {"from_code": "isin",
+                   "input_from_isin": isin,
+                   "isin_code_state": "Y",
+                   "cfi_code_state": "Y",
+                   "search": 1}
+
+    if not os.path.exists(FILENAME_FOR_NRA_OUTPUT) or \
+            datetime.fromtimestamp(os.path.getctime(FILENAME_FOR_NRA_OUTPUT)).day != datetime.now().day:
+        r = requests.get("https://www.ra-national.ru/wp-load.php?security_key=100c906f36a0b90e&export_id=20&action"
+                         "=get_data")
+        open(FILENAME_FOR_NRA_OUTPUT, 'wb').write(r.content)
+
+    try:
+        r = requests.post("https://www.isin.ru/ru/ru_isin/db/", data=data_to_nra, verify=False)
+    except Exception as e:
+        raise ValueError("get_NRA_rating_by_ticker::" + str(e))
+
+    if r.text.find("index.php?type=issue_id") == -1:
+        return "Нет ИНН на isin.ru"
+    else:
+        company_url = "https://www.isin.ru/ru/ru_isin/db/" + r.text[r.text.find("index.php?type=issue_id"):].split("\"")[0]
+
+    try:
+        r = requests.get(company_url, verify=False)
+    except Exception as e:
+        raise ValueError("get_NRA_rating_by_ticker::" + str(e))
+
+    if r.text.find("ИНН") == -1:
+        return "Нет ИНН на isin.ru"
+    else:
+        try:
+            itn = int(r.text[r.text.find("ИНН")+16:].split("<")[0])
+        except:
+            return "Нет ИНН на isin.ru"
+
+    current_nra_rating_data_frame = pandas.read_excel("current-ratings.xlsx")
+    rows_by_itn = current_nra_rating_data_frame[current_nra_rating_data_frame["ИНН"] == itn]
+    if rows_by_itn.empty:
+        return "Не оценен"
+    try:
+        return rows_by_itn.at[rows_by_itn.index[0], 'Рейтинг']
+    except:
+        return "Не оценен"
 
 
 def acra_get_rating_by_url(url):
@@ -146,7 +199,7 @@ def get_acra_rating_by_isin(isin):
                     return acra_get_rating_by_url(item.find('a', attrs={'class': "search-result__item-text"})['href'])
                 except Exception as e:
                     raise ValueError("get_acra_rating_by_isin::" + str(e))
-    return "Отсутствует"
+    return "Не оценен"
 
 
 def is_available_bond(bond):
@@ -213,6 +266,7 @@ def write_list_in_excel_file(workbook, sheet, list):
     sheet.write('G1', "Лет до погашения", cell_format)
     sheet.write('H1', "Дюрация", cell_format)
     sheet.write('I1', "Рейтинг (АКРА)", cell_format)
+    sheet.write('J1', "Рейтинг (НРА)", cell_format)
     count = 2
     for bond in list:
         if bond.get_coupon() and bond.get_price():
@@ -224,7 +278,8 @@ def write_list_in_excel_file(workbook, sheet, list):
             sheet.write('F' + str(count), bond.get_coupon_per_year(), cell_format)
             sheet.write('G' + str(count), bond.get_years_before_maturity(), cell_format)
             sheet.write('H' + str(count), bond.get_duration(), cell_format)
-            sheet.write('I' + str(count), bond.get_rating(), cell_format)
+            sheet.write('I' + str(count), bond.get_acra_rating(), cell_format)
+            sheet.write('J' + str(count), bond.get_nra_rating(), cell_format)
             count += 1
 
 
@@ -306,8 +361,8 @@ def parse_parameters_from_config():
             API_DELAY = config["API_DELAY"]
             EXCEL_TABLE_NAME = config["EXCEL_TABLE_NAME"]
             FOR_QUAL_INVESTOR = config["FOR_QUAL_INVESTOR"]
-            # AMORTIZATION = config["AMORTIZATION"]
-            # FLOATING_COUPON = config["FLOATING_COUPON"]
+            #AMORTIZATION = config["AMORTIZATION"]
+            #FLOATING_COUPON = config["FLOATING_COUPON"]
     except Exception as e:
         raise ValueError("parse_parameters_from_config::" + "Проблема чтения конфигурации: " + str(e))
 
