@@ -7,7 +7,6 @@ bs4==0.0.1
 cachetools==5.3.0
 certifi==2022.9.14
 charset-normalizer==2.1.1
-frida==15.2.1
 grpcio==1.51.1
 idna==3.4
 ipaddress==1.0.23
@@ -34,3 +33,4 @@ wcwidth==0.2.6
 websocket-client==1.5.0
 XlsxWriter==3.0.8
 yfinance==0.1.85
+openpyxl==3.1.1
