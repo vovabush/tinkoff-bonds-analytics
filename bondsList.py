@@ -12,6 +12,7 @@ from subprocess import Popen
 from tinkoff.invest import Client
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from bs4 import BeautifulSoup
+from optparse import OptionParser
 
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
@@ -35,7 +36,9 @@ REQUEST_TO_AKRA = {"text": "",
                    "sort": "",
                    "count": "1500"}
 START_TIME = None
-FILENAME_FOR_NRA_OUTPUT = "current-ratings.xlsx"
+FILENAME_FOR_NRA_OUTPUT = "NRA_ratings.xlsx"
+FILENAME_FOR_NKR_OUTPUT = "NKR_ratings.xlsx"
+NOT_WRITE_WITHOUT_RATING = False
 
 
 class Bond:
@@ -59,7 +62,7 @@ class Bond:
         self.coupon_per_year = bond_desc.coupon_quantity_per_year
         self.yeild = round((0.87 * (self.get_coupon() * self.get_coupon_per_year())) / (
                 self.get_price() + self.get_accumulated_coupon_income()), 3) * 100
-
+        self.isin = bond_desc.isin
         self.duration = 0
         common_income = 0
         for coupon in coupons:
@@ -71,10 +74,25 @@ class Bond:
         self.duration = round((self.duration + nominal * self.years_before_maturity) / common_income, 2)
 
         try:
-            self.rating_acra = get_acra_rating_by_isin(bond_desc.isin)
-            self.rating_nra = get_NRA_rating_by_isin(bond_desc.isin)
-        except Exception as e:
-            raise ValueError("Bond.__init__::" + str(e))
+            self.rating_acra = get_acra_rating_by_isin(self.isin)
+        except:
+            self.rating_acra = "Ошибка запроса"
+
+        try:
+            self.itn = self.get_company_itn()
+        except:
+            self.rating_nra = "Ошибка запроса ИНН"
+            self.rating_nkr = "Ошибка запроса ИНН"
+
+        try:
+            self.rating_nra = get_NRA_rating_by_isin(self.itn)
+        except:
+            self.rating_nra = "Ошибка запроса"
+
+        try:
+            self.rating_nkr = get_NKR_rating_by_isin(self.itn)
+        except:
+            self.rating_nkr = "Ошибка запроса"
 
     def get_price(self):
         return self.price
@@ -109,13 +127,58 @@ class Bond:
     def get_nra_rating(self):
         return self.rating_nra
 
+    def get_nkr_rating(self):
+        return self.rating_nkr
 
-def get_NRA_rating_by_isin(isin):
-    data_to_nra = {"from_code": "isin",
-                   "input_from_isin": isin,
-                   "isin_code_state": "Y",
-                   "cfi_code_state": "Y",
-                   "search": 1}
+    def get_company_itn(self):
+        data_for_get_itn = {"from_code": "isin",
+                            "input_from_isin": self.isin,
+                            "isin_code_state": "Y",
+                            "cfi_code_state": "Y",
+                            "search": 1}
+
+        try:
+            r = requests.post("https://www.isin.ru/ru/ru_isin/db/", data=data_for_get_itn, verify=False)
+        except Exception as e:
+            raise ValueError("get_company_itn::" + str(e))
+
+        if r.text.find("index.php?type=issue_id") == -1:
+            return ""
+        else:
+            company_url = "https://www.isin.ru/ru/ru_isin/db/" + r.text[r.text.find("index.php?type=issue_id"):].split("\"")[0]
+
+        try:
+            r = requests.get(company_url, verify=False)
+        except Exception as e:
+            raise ValueError("get_company_itn::" + str(e))
+
+        if r.text.find("ИНН") == -1:
+            return ""
+        else:
+            try:
+                return int(r.text[r.text.find("ИНН")+16:].split("<")[0])
+            except:
+                return ""
+
+
+def get_NKR_rating_by_isin(itn):
+
+    if not os.path.exists(FILENAME_FOR_NKR_OUTPUT) or \
+            datetime.fromtimestamp(os.path.getctime(FILENAME_FOR_NKR_OUTPUT)).day != datetime.now().day:
+        r = requests.get("https://ratings.ru/issuers.php")
+        open(FILENAME_FOR_NKR_OUTPUT, 'wb').write(r.content)
+
+    current_nkr_rating_data_frame = pandas.read_excel(FILENAME_FOR_NKR_OUTPUT)
+    rows_by_itn = current_nkr_rating_data_frame[current_nkr_rating_data_frame["TIN"] == itn]
+    if rows_by_itn.empty:
+        return "Не оценен"
+    try:
+        return rows_by_itn.at[rows_by_itn.index[0], 'Rating']
+    except:
+        return "Не оценен"
+
+
+def get_NRA_rating_by_isin(itn):
 
     if not os.path.exists(FILENAME_FOR_NRA_OUTPUT) or \
             datetime.fromtimestamp(os.path.getctime(FILENAME_FOR_NRA_OUTPUT)).day != datetime.now().day:
@@ -123,30 +186,7 @@ def get_NRA_rating_by_isin(isin):
                          "=get_data")
         open(FILENAME_FOR_NRA_OUTPUT, 'wb').write(r.content)
 
-    try:
-        r = requests.post("https://www.isin.ru/ru/ru_isin/db/", data=data_to_nra, verify=False)
-    except Exception as e:
-        raise ValueError("get_NRA_rating_by_ticker::" + str(e))
-
-    if r.text.find("index.php?type=issue_id") == -1:
-        return "Нет ИНН на isin.ru"
-    else:
-        company_url = "https://www.isin.ru/ru/ru_isin/db/" + r.text[r.text.find("index.php?type=issue_id"):].split("\"")[0]
-
-    try:
-        r = requests.get(company_url, verify=False)
-    except Exception as e:
-        raise ValueError("get_NRA_rating_by_ticker::" + str(e))
-
-    if r.text.find("ИНН") == -1:
-        return "Нет ИНН на isin.ru"
-    else:
-        try:
-            itn = int(r.text[r.text.find("ИНН")+16:].split("<")[0])
-        except:
-            return "Нет ИНН на isin.ru"
-
-    current_nra_rating_data_frame = pandas.read_excel("current-ratings.xlsx")
+    current_nra_rating_data_frame = pandas.read_excel(FILENAME_FOR_NRA_OUTPUT)
     rows_by_itn = current_nra_rating_data_frame[current_nra_rating_data_frame["ИНН"] == itn]
     if rows_by_itn.empty:
         return "Не оценен"
@@ -265,11 +305,19 @@ def write_list_in_excel_file(workbook, sheet, list):
     sheet.write('F1', "Купонов в год", cell_format)
     sheet.write('G1', "Лет до погашения", cell_format)
     sheet.write('H1', "Дюрация", cell_format)
-    sheet.write('I1', "Рейтинг (АКРА)", cell_format)
-    sheet.write('J1', "Рейтинг (НРА)", cell_format)
+    if sheet.get_name() == "Корпоративные":
+        sheet.write('I1', "Рейтинг (АКРА)", cell_format)
+        sheet.write('J1', "Рейтинг (НРА)", cell_format)
+        sheet.write('K1', "Рейтинг (НКР)", cell_format)
     count = 2
     for bond in list:
         if bond.get_coupon() and bond.get_price():
+            if NOT_WRITE_WITHOUT_RATING and \
+                    sheet.get_name() == "Корпоративные" and \
+                    bond.get_acra_rating() == "Не оценен" and \
+                    bond.get_nkr_rating() == "Не оценен" and \
+                    bond.get_nkr_rating() == "Не оценен":
+                continue
             sheet.write('A' + str(count), bond.get_name(), cell_format)
             sheet.write('B' + str(count), bond.get_ticker(), cell_format)
             sheet.write('C' + str(count), bond.get_price() + bond.get_accumulated_coupon_income(), cell_format)
@@ -278,8 +326,10 @@ def write_list_in_excel_file(workbook, sheet, list):
             sheet.write('F' + str(count), bond.get_coupon_per_year(), cell_format)
             sheet.write('G' + str(count), bond.get_years_before_maturity(), cell_format)
             sheet.write('H' + str(count), bond.get_duration(), cell_format)
-            sheet.write('I' + str(count), bond.get_acra_rating(), cell_format)
-            sheet.write('J' + str(count), bond.get_nra_rating(), cell_format)
+            if sheet.get_name() == "Корпоративные":
+                sheet.write('I' + str(count), bond.get_acra_rating(), cell_format)
+                sheet.write('J' + str(count), bond.get_nra_rating(), cell_format)
+                sheet.write('K' + str(count), bond.get_nkr_rating(), cell_format)
             count += 1
 
 
@@ -361,11 +411,17 @@ def parse_parameters_from_config():
             API_DELAY = config["API_DELAY"]
             EXCEL_TABLE_NAME = config["EXCEL_TABLE_NAME"]
             FOR_QUAL_INVESTOR = config["FOR_QUAL_INVESTOR"]
-            #AMORTIZATION = config["AMORTIZATION"]
-            #FLOATING_COUPON = config["FLOATING_COUPON"]
+            AMORTIZATION = config["AMORTIZATION"]
+            FLOATING_COUPON = config["FLOATING_COUPON"]
     except Exception as e:
         raise ValueError("parse_parameters_from_config::" + "Проблема чтения конфигурации: " + str(e))
 
+
+parser = OptionParser()
+parser.add_option("-c", "--clear", action="store_true", default=False, help="Не выводить в итоговой таблице"
+                                                                            " компании без рейтингов")
+(options, args) = parser.parse_args()
+NOT_WRITE_WITHOUT_RATING = options.clear
 
 try:
     parse_parameters_from_config()
