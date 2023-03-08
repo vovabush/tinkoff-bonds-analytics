@@ -44,14 +44,13 @@ NOT_WRITE_WITHOUT_RATING = False
 class Bond:
     def __init__(self, bond_desc):
         nominal = bond_desc.nominal.units + (bond_desc.nominal.nano / DIV)
-
         with Client(TOKEN) as client:
             quotation = client.market_data.get_last_prices(figi=[bond_desc.figi]).last_prices[0].price
             coupons = client.instruments.get_bond_coupons(figi=bond_desc.figi,
                                                           from_=datetime.today(),
                                                           to=datetime.today() + timedelta(days=3650)).events
             try:
-                self.coupon = coupons[-1].pay_one_bond.units + (coupons[-1].pay_one_bond.nano / DIV)
+                self.coupon = coupons[0].pay_one_bond.units + (coupons[0].pay_one_bond.nano / DIV)
             except:
                 self.coupon = 0
         self.price = (quotation.units + (quotation.nano / DIV)) / 100 * nominal
@@ -73,26 +72,37 @@ class Bond:
         common_income += nominal
         self.duration = round((self.duration + nominal * self.years_before_maturity) / common_income, 2)
 
-        try:
-            self.rating_acra = get_acra_rating_by_isin(self.isin)
-        except:
-            self.rating_acra = "Ошибка запроса"
+        if bond_desc.sector == "government":
+            self.rating_acra = "Отсутствует"
+            self.itn = "Отсутствует"
+            self.rating_nra = "Отсутствует"
+            self.rating_nkr = "Отсутствует"
+        else:
+            try:
+                self.rating_acra = get_acra_rating_by_isin(self.isin)
+            except:
+                self.rating_acra = "Ошибка запроса"
+
+            try:
+                self.itn = self.get_company_itn()
+            except:
+                self.rating_nra = "Ошибка запроса ИНН"
+                self.rating_nkr = "Ошибка запроса ИНН"
+
+            try:
+                self.rating_nra = get_NRA_rating_by_isin(self.itn)
+            except:
+                self.rating_nra = "Ошибка запроса"
+
+            try:
+                self.rating_nkr = get_NKR_rating_by_isin(self.itn)
+            except:
+                self.rating_nkr = "Ошибка запроса"
 
         try:
-            self.itn = self.get_company_itn()
+            self.rating_tinkoff = bond_desc.risk_level.value
         except:
-            self.rating_nra = "Ошибка запроса ИНН"
-            self.rating_nkr = "Ошибка запроса ИНН"
-
-        try:
-            self.rating_nra = get_NRA_rating_by_isin(self.itn)
-        except:
-            self.rating_nra = "Ошибка запроса"
-
-        try:
-            self.rating_nkr = get_NKR_rating_by_isin(self.itn)
-        except:
-            self.rating_nkr = "Ошибка запроса"
+            self.rating_tinkoff = "Не оценен"
 
     def get_price(self):
         return self.price
@@ -159,6 +169,9 @@ class Bond:
                 return int(r.text[r.text.find("ИНН")+16:].split("<")[0])
             except:
                 return ""
+
+    def get_tinkoff_rating(self):
+        return self.rating_tinkoff
 
 
 def get_NKR_rating_by_isin(itn):
@@ -309,6 +322,7 @@ def write_list_in_excel_file(workbook, sheet, list):
         sheet.write('I1', "Рейтинг (АКРА)", cell_format)
         sheet.write('J1', "Рейтинг (НРА)", cell_format)
         sheet.write('K1', "Рейтинг (НКР)", cell_format)
+        sheet.write('L1', "Рейтинг (Тинькофф)", cell_format)
     count = 2
     for bond in list:
         if bond.get_coupon() and bond.get_price():
@@ -330,6 +344,7 @@ def write_list_in_excel_file(workbook, sheet, list):
                 sheet.write('I' + str(count), bond.get_acra_rating(), cell_format)
                 sheet.write('J' + str(count), bond.get_nra_rating(), cell_format)
                 sheet.write('K' + str(count), bond.get_nkr_rating(), cell_format)
+                sheet.write('L' + str(count), bond.get_tinkoff_rating(), cell_format)
             count += 1
 
 
