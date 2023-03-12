@@ -80,28 +80,33 @@ class Bond:
         else:
             try:
                 self.rating_acra = get_acra_rating_by_isin(self.isin)
-            except:
+            except Exception as e:
+                print(str(e))
                 self.rating_acra = "Ошибка запроса"
 
             try:
                 self.itn = self.get_company_itn()
-            except:
+            except Exception as e:
+                print(str(e))
                 self.rating_nra = "Ошибка запроса ИНН"
                 self.rating_nkr = "Ошибка запроса ИНН"
 
             try:
                 self.rating_nra = get_NRA_rating_by_isin(self.itn)
-            except:
+            except Exception as e:
+                print(str(e))
                 self.rating_nra = "Ошибка запроса"
 
             try:
                 self.rating_nkr = get_NKR_rating_by_isin(self.itn)
-            except:
+            except Exception as e:
+                print(str(e))
                 self.rating_nkr = "Ошибка запроса"
 
         try:
             self.rating_tinkoff = bond_desc.risk_level.value
-        except:
+        except Exception as e:
+            print(str(e))
             self.rating_tinkoff = "Не оценен"
 
     def get_price(self):
@@ -403,8 +408,8 @@ def open_output_table():
 def debugAPI(ticker):
     with Client(TOKEN) as client:
         bonds = client.instruments.bond_by(id_type=2, class_code='TQIR', id=ticker)
-        # print(bonds)
-        print(client.market_data.get_last_prices(figi=["BBG00A0ZZ8A2"]).last_prices)
+        print(bonds)
+        print(client.market_data.get_last_prices(figi=["TCS00A105QL6"]).last_prices)
         # print(str(client.instruments.get_accrued_interests(figi="BBG00QXGFHS6", from_=datetime.today() , 
         # to=datetime.today() + timedelta(days=365)).accrued_interests)) 
         exit(0)
