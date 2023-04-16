@@ -104,10 +104,10 @@ class Bond:
                 self.rating_nkr = "Ошибка запроса"
 
         try:
-            self.rating_tinkoff = bond_desc.risk_level.value
+            self.risk_tinkoff = bond_desc.risk_level.value
         except Exception as e:
             print(str(e))
-            self.rating_tinkoff = "Не оценен"
+            self.risk_tinkoff = "Не оценен"
 
     def get_price(self):
         return self.price
@@ -175,8 +175,8 @@ class Bond:
             except:
                 return ""
 
-    def get_tinkoff_rating(self):
-        return self.rating_tinkoff
+    def get_tinkoff_risk(self):
+        return self.risk_tinkoff
 
 
 def get_NKR_rating_by_isin(itn):
@@ -327,7 +327,7 @@ def write_list_in_excel_file(workbook, sheet, list):
         sheet.write('I1', "Рейтинг (АКРА)", cell_format)
         sheet.write('J1', "Рейтинг (НРА)", cell_format)
         sheet.write('K1', "Рейтинг (НКР)", cell_format)
-        sheet.write('L1', "Рейтинг (Тинькофф)", cell_format)
+        sheet.write('L1', "Риск (Тинькофф)", cell_format)
     count = 2
     for bond in list:
         if bond.get_coupon() and bond.get_price():
@@ -349,7 +349,7 @@ def write_list_in_excel_file(workbook, sheet, list):
                 sheet.write('I' + str(count), bond.get_acra_rating(), cell_format)
                 sheet.write('J' + str(count), bond.get_nra_rating(), cell_format)
                 sheet.write('K' + str(count), bond.get_nkr_rating(), cell_format)
-                sheet.write('L' + str(count), bond.get_tinkoff_rating(), cell_format)
+                sheet.write('L' + str(count), bond.get_tinkoff_risk(), cell_format)
             count += 1
 
 
