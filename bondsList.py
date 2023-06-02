@@ -59,8 +59,11 @@ class Bond:
         self.years_before_maturity = round((bond_desc.maturity_date - datetime.now(timezone.utc)).days / 365.25, 1)
         self.accumulated_coupon_income = bond_desc.aci_value.units + (bond_desc.aci_value.nano / DIV)
         self.coupon_per_year = bond_desc.coupon_quantity_per_year
-        self.yeild = round((0.87 * (self.get_coupon() * self.get_coupon_per_year())) / (
-                self.get_price() + self.get_accumulated_coupon_income()), 3) * 100
+        try:
+            self.yeild = round((0.87 * (self.get_coupon() * self.get_coupon_per_year())) /
+                               (self.get_price() + self.get_accumulated_coupon_income()), 3) * 100
+        except:
+            self.yeild = 0
         self.isin = bond_desc.isin
         self.duration = 0
         common_income = 0
@@ -71,6 +74,7 @@ class Bond:
             common_income += coupon_cost
         common_income += nominal
         self.duration = round((self.duration + nominal * self.years_before_maturity) / common_income, 2)
+        self.sector = translate_sector(bond_desc.sector)
 
         if bond_desc.sector == "government":
             self.rating_acra = "Отсутствует"
@@ -177,6 +181,38 @@ class Bond:
 
     def get_tinkoff_risk(self):
         return self.risk_tinkoff
+
+    def get_sector(self):
+        return self.sector
+
+
+def translate_sector(sector_en):
+    if sector_en == "financial":
+        return "Финансы"
+    elif sector_en == "consumer":
+        return "Потребительский"
+    elif sector_en == "real_estate":
+        return "Недвижимость"
+    elif sector_en == "materials":
+        return "Ресурсы"
+    elif sector_en == "utilities":
+        return "Коммунальный"
+    elif sector_en == "telecom":
+        return "Телекоммуникации"
+    elif sector_en == "industrials":
+        return "Промышленность"
+    elif sector_en == "other":
+        return "Другое"
+    elif sector_en == "health_care":
+        return "Здравоохранение"
+    elif sector_en == "it":
+        return "ИТ"
+    elif sector_en == "energy":
+        return "Энергетика"
+    elif sector_en == "municipal":
+        return "Муниципальный"
+    else:
+        return sector_en
 
 
 def get_NKR_rating_by_isin(itn):
@@ -328,6 +364,7 @@ def write_list_in_excel_file(workbook, sheet, list):
         sheet.write('J1', "Рейтинг (НРА)", cell_format)
         sheet.write('K1', "Рейтинг (НКР)", cell_format)
         sheet.write('L1', "Риск (Тинькофф)", cell_format)
+        sheet.write('M1', "Сектор", cell_format)
     count = 2
     for bond in list:
         if bond.get_coupon() and bond.get_price():
@@ -350,6 +387,7 @@ def write_list_in_excel_file(workbook, sheet, list):
                 sheet.write('J' + str(count), bond.get_nra_rating(), cell_format)
                 sheet.write('K' + str(count), bond.get_nkr_rating(), cell_format)
                 sheet.write('L' + str(count), bond.get_tinkoff_risk(), cell_format)
+                sheet.write('M' + str(count), bond.get_sector(), cell_format)
             count += 1
 
 
@@ -382,21 +420,23 @@ def create_output_table(governmentBondObjects, corporateBondsObjects):
 
 
 def get_excel_path():
-    handle = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+    try:
+        handle = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
                             r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\excel.exe")
 
-    num_values = winreg.QueryInfoKey(handle)[1]
-    for i in range(num_values):
-        if winreg.EnumValue(handle, i)[0] == 'Path':
-            return winreg.EnumValue(handle, i)[1] + "EXCEL.EXE"
-    raise ValueError("get_excel_path::" + "Путь к Excel.exe не найден. Откройте bonds.xlsx самостоятельно.")
+        num_values = winreg.QueryInfoKey(handle)[1]
+        for i in range(num_values):
+            if winreg.EnumValue(handle, i)[0] == 'Path':
+                return winreg.EnumValue(handle, i)[1] + "EXCEL.EXE"
+    except:
+        raise ValueError("get_excel_path::" + "Путь к Excel.exe не найден. Откройте bonds.xlsx самостоятельно.")
 
 
 def open_output_table():
     try:
         runnuingString = get_excel_path()
     except Exception as ex:
-        raise ValueError("open_output_table::" + str(ex))
+        raise ValueError(str(ex))
     args = [runnuingString, EXCEL_TABLE_NAME]
     try:
         Popen(args)
@@ -452,6 +492,3 @@ try:
     open_output_table()
 except Exception as ex:
     print(ex)
-    exit(1)
-
-exit(0)
