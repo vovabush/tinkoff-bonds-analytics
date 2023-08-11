@@ -252,7 +252,7 @@ def get_NRA_rating_by_isin(itn):
 
 def acra_get_rating_by_url(url):
     request_url = "https://www.acra-ratings.ru" + url
-    r = requests.get(request_url, verify=False)
+    r = requests.get(request_url, verify=False, headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
     if r.status_code != 200:
         raise ValueError("acra_get_rating_by_url::" + "Запрос к " + url + " произошёл с ошибкой: " + str(r.status_code))
 
@@ -262,10 +262,9 @@ def acra_get_rating_by_url(url):
 
 def get_acra_rating_by_isin(isin):
     try:
-        r = requests.get("https://www.acra-ratings.ru/search/?q=" + isin, verify=False)
+        r = requests.get("https://www.acra-ratings.ru/search/?q=" + isin, verify=False, headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
     except Exception as e:
         raise ValueError("get_acra_rating_by_isin::" + str(e))
-
     if r.status_code != 200:
         raise ValueError("get_acra_rating_by_isin::" + "Попытка 1 запросить рейтинги эмитента" + isin + "у АКРА "
                                                                                                         "произошла с "
