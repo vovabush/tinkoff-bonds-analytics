@@ -53,7 +53,10 @@ class Bond:
                 self.coupon = coupons[0].pay_one_bond.units + (coupons[0].pay_one_bond.nano / DIV)
             except:
                 self.coupon = 0
-        self.price = (quotation.units + (quotation.nano / DIV)) / 100 * nominal
+        try:
+            self.price = (quotation.units + (quotation.nano / DIV)) / 100 * nominal
+        except:
+            self.price = 0
         self.ticker = bond_desc.ticker
         self.name = bond_desc.name
         self.years_before_maturity = round((bond_desc.maturity_date - datetime.now(timezone.utc)).days / 365.25, 1)
@@ -73,7 +76,10 @@ class Bond:
             self.duration += coupon_cost * years_before_payment
             common_income += coupon_cost
         common_income += nominal
-        self.duration = round((self.duration + nominal * self.years_before_maturity) / common_income, 2)
+        try:
+            self.duration = round((self.duration + nominal * self.years_before_maturity) / common_income, 2)
+        except:
+            self.duration = 0
         self.sector = translate_sector(bond_desc.sector)
 
         if bond_desc.sector == "government":
