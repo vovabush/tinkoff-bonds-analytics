@@ -372,28 +372,31 @@ def write_list_in_excel_file(workbook, sheet, list):
         sheet.write('M1', "Сектор", cell_format)
     count = 2
     for bond in list:
-        if bond.get_coupon() and bond.get_price():
-            if NOT_WRITE_WITHOUT_RATING and \
-                    sheet.get_name() == "Корпоративные" and \
-                    bond.get_acra_rating() == "Не оценен" and \
-                    bond.get_nkr_rating() == "Не оценен" and \
-                    bond.get_nkr_rating() == "Не оценен":
-                continue
-            sheet.write('A' + str(count), bond.get_name(), cell_format)
-            sheet.write('B' + str(count), bond.get_ticker(), cell_format)
-            sheet.write('C' + str(count), bond.get_price() + bond.get_accumulated_coupon_income(), cell_format)
-            sheet.write('D' + str(count), bond.get_coupon(), cell_format)
-            sheet.write('E' + str(count), bond.get_yeild(), cell_format)
-            sheet.write('F' + str(count), bond.get_coupon_per_year(), cell_format)
-            sheet.write('G' + str(count), bond.get_years_before_maturity(), cell_format)
-            sheet.write('H' + str(count), bond.get_duration(), cell_format)
-            if sheet.get_name() == "Корпоративные":
-                sheet.write('I' + str(count), bond.get_acra_rating(), cell_format)
-                sheet.write('J' + str(count), bond.get_nra_rating(), cell_format)
-                sheet.write('K' + str(count), bond.get_nkr_rating(), cell_format)
-                sheet.write('L' + str(count), bond.get_tinkoff_risk(), cell_format)
-                sheet.write('M' + str(count), bond.get_sector(), cell_format)
-            count += 1
+        try:
+            if bond.get_coupon() and bond.get_price():
+                if NOT_WRITE_WITHOUT_RATING and \
+                        sheet.get_name() == "Корпоративные" and \
+                        bond.get_acra_rating() == "Не оценен" and \
+                        bond.get_nkr_rating() == "Не оценен" and \
+                        bond.get_nkr_rating() == "Не оценен":
+                    continue
+                sheet.write('A' + str(count), bond.get_name(), cell_format)
+                sheet.write('B' + str(count), bond.get_ticker(), cell_format)
+                sheet.write('C' + str(count), bond.get_price() + bond.get_accumulated_coupon_income(), cell_format)
+                sheet.write('D' + str(count), bond.get_coupon(), cell_format)
+                sheet.write('E' + str(count), bond.get_yeild(), cell_format)
+                sheet.write('F' + str(count), bond.get_coupon_per_year(), cell_format)
+                sheet.write('G' + str(count), bond.get_years_before_maturity(), cell_format)
+                sheet.write('H' + str(count), bond.get_duration(), cell_format)
+                if sheet.get_name() == "Корпоративные":
+                    sheet.write('I' + str(count), bond.get_acra_rating(), cell_format)
+                    sheet.write('J' + str(count), bond.get_nra_rating(), cell_format)
+                    sheet.write('K' + str(count), bond.get_nkr_rating(), cell_format)
+                    sheet.write('L' + str(count), bond.get_tinkoff_risk(), cell_format)
+                    sheet.write('M' + str(count), bond.get_sector(), cell_format)
+                count += 1
+        except:
+            pass
 
 
 def write_government_bonds_in_excel_file(workbook, governmentBondOdjects):
