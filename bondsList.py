@@ -13,6 +13,7 @@ from tinkoff.invest import Client
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from bs4 import BeautifulSoup
 from optparse import OptionParser
+from tqdm import tqdm
 
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
@@ -45,28 +46,45 @@ class Bond:
     def __init__(self, bond_desc):
         nominal = bond_desc.nominal.units + (bond_desc.nominal.nano / DIV)
         with Client(TOKEN) as client:
-            quotation = client.market_data.get_last_prices(figi=[bond_desc.figi]).last_prices[0].price
-            coupons = client.instruments.get_bond_coupons(figi=bond_desc.figi,
-                                                          from_=datetime.today(),
-                                                          to=datetime.today() + timedelta(days=3650)).events
+            try:
+                coupons = client.instruments.get_bond_coupons(figi=bond_desc.figi,
+                                                              from_=datetime.today(),
+                                                              to=datetime.today() + timedelta(days=3650*2)).events
+            except:
+                time.sleep(API_DELAY)
+                coupons = client.instruments.get_bond_coupons(figi=bond_desc.figi,
+                                                              from_=datetime.today(),
+                                                              to=datetime.today() + timedelta(days=3650*2)).events
+
             try:
                 self.coupon = coupons[0].pay_one_bond.units + (coupons[0].pay_one_bond.nano / DIV)
             except:
                 self.coupon = 0
-        try:
-            self.price = (quotation.units + (quotation.nano / DIV)) / 100 * nominal
-        except:
-            self.price = 0
+
         self.ticker = bond_desc.ticker
         self.name = bond_desc.name
         self.years_before_maturity = round((bond_desc.maturity_date - datetime.now(timezone.utc)).days / 365.25, 1)
         self.accumulated_coupon_income = bond_desc.aci_value.units + (bond_desc.aci_value.nano / DIV)
         self.coupon_per_year = bond_desc.coupon_quantity_per_year
+
+        with Client(TOKEN) as client:
+            try:
+                quotation = client.market_data.get_last_prices(figi=[bond_desc.figi]).last_prices[0].price
+            except:
+                time.sleep(API_DELAY)
+                quotation = client.market_data.get_last_prices(figi=[bond_desc.figi]).last_prices[0].price
+
+            try:
+                self.price = (quotation.units + (quotation.nano / DIV)) / 100 * nominal
+            except:
+                self.price = 0
+        
         try:
             self.yeild = round((0.87 * (self.get_coupon() * self.get_coupon_per_year())) /
                                (self.get_price() + self.get_accumulated_coupon_income()), 3) * 100
         except:
             self.yeild = 0
+
         self.isin = bond_desc.isin
         self.duration = 0
         common_income = 0
@@ -80,6 +98,21 @@ class Bond:
             self.duration = round((self.duration + nominal * self.years_before_maturity) / common_income, 2)
         except:
             self.duration = 0
+
+        self.yield_to_maturity = 0
+        coupon_income = 0
+        for coupon in coupons:
+            if coupon.pay_one_bond.units + (coupon.pay_one_bond.nano / DIV) == 0:
+               self.yield_to_maturity = "Н/д" 
+            coupon_income += coupon.pay_one_bond.units + (coupon.pay_one_bond.nano / DIV)
+
+        if self.yield_to_maturity != "Н/д":
+            try:
+                self.yield_to_maturity = round((0.87 * 365 * (coupon_income + nominal - self.get_price() - self.get_accumulated_coupon_income()) /
+                                   (((bond_desc.maturity_date - datetime.now(timezone.utc)).days) * (self.get_price() + self.get_accumulated_coupon_income()))), 3) * 100
+            except:
+                self.yield_to_maturity = 0
+
         self.sector = translate_sector(bond_desc.sector)
 
         if bond_desc.sector == "government":
@@ -142,6 +175,9 @@ class Bond:
 
     def get_yeild(self):
         return self.yeild
+
+    def get_yield_to_maturity(self):
+        return self.yield_to_maturity
 
     def get_duration(self):
         return self.duration
@@ -293,7 +329,7 @@ def get_acra_rating_by_isin(isin):
                 raise ValueError("get_acra_rating_by_isin::" + str(e))
 
             if "Выпуск" in searched_name:
-                time.sleep(API_DELAY)
+                time.sleep(0.1)
                 try:
                     return acra_get_rating_by_url(item.find('a', attrs={'class': "search-result__item-text"})['href'])
                 except Exception as e:
@@ -314,44 +350,21 @@ def is_available_bond(bond):
         return False
 
 
-def print_progress_bar(iteration, total):
-    global START_TIME
-
-    prefix = 'Прогресс:'
-    suffix = 'Готово'
-    fill = '█'
-    length = 50
-    decimals = 1
-    printEnd = "\r"
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-    filledLength = int(length * iteration // total)
-    bar = fill * filledLength + '-' * (length - filledLength)
-    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end=printEnd)
-    # Print New Line on Complete
-    if iteration == total:
-        print("\nВремя работы: " + str(datetime.now() - START_TIME).split('.', 2)[0])
-    elif iteration == 0:
-        START_TIME = datetime.now()
-
-
 def download_bonds_info(governmentBondObjects, corporateBondsObjects):
     with Client(TOKEN) as client:
         try:
             bonds = client.instruments.bonds()
         except Exception as ex:
             raise ValueError("download_bonds_info::" + "Нет связи с сервером по причине: " + str(ex))
-        countOfBonds = len(bonds.instruments)
-        currentBond = 0
-        print_progress_bar(currentBond, countOfBonds)
-        for bond in bonds.instruments:
-            currentBond += 1
-            if is_available_bond(bond):
-                time.sleep(API_DELAY)
-                print_progress_bar(currentBond, countOfBonds)
-                if bond.sector == "government":
-                    governmentBondObjects.append(Bond(bond))
-                else:
-                    corporateBondsObjects.append(Bond(bond))
+    progress_bar = tqdm(total=len(bonds.instruments), desc="Прогресс", unit="облигация")
+    for bond in bonds.instruments:
+        progress_bar.update(1)
+        if is_available_bond(bond):
+            if bond.sector == "government":
+                governmentBondObjects.append(Bond(bond))
+            else:
+                corporateBondsObjects.append(Bond(bond))
+    progress_bar.close()
 
 
 def write_list_in_excel_file(workbook, sheet, list):
@@ -361,15 +374,16 @@ def write_list_in_excel_file(workbook, sheet, list):
     sheet.write('C1', "Цена + НКД", cell_format)
     sheet.write('D1', "Купон", cell_format)
     sheet.write('E1', "Годовая доходность", cell_format)
-    sheet.write('F1', "Купонов в год", cell_format)
-    sheet.write('G1', "Лет до погашения", cell_format)
-    sheet.write('H1', "Дюрация", cell_format)
+    sheet.write('F1', "Доходность к погашению", cell_format)
+    sheet.write('G1', "Купонов в год", cell_format)
+    sheet.write('H1', "Лет до погашения", cell_format)
+    sheet.write('I1', "Дюрация", cell_format)
     if sheet.get_name() == "Корпоративные":
-        sheet.write('I1', "Рейтинг (АКРА)", cell_format)
-        sheet.write('J1', "Рейтинг (НРА)", cell_format)
-        sheet.write('K1', "Рейтинг (НКР)", cell_format)
-        sheet.write('L1', "Риск (Тинькофф)", cell_format)
-        sheet.write('M1', "Сектор", cell_format)
+        sheet.write('J1', "Рейтинг (АКРА)", cell_format)
+        sheet.write('K1', "Рейтинг (НРА)", cell_format)
+        sheet.write('L1', "Рейтинг (НКР)", cell_format)
+        sheet.write('M1', "Риск (Тинькофф)", cell_format)
+        sheet.write('N1', "Сектор", cell_format)
     count = 2
     for bond in list:
         try:
@@ -385,15 +399,16 @@ def write_list_in_excel_file(workbook, sheet, list):
                 sheet.write('C' + str(count), bond.get_price() + bond.get_accumulated_coupon_income(), cell_format)
                 sheet.write('D' + str(count), bond.get_coupon(), cell_format)
                 sheet.write('E' + str(count), bond.get_yeild(), cell_format)
-                sheet.write('F' + str(count), bond.get_coupon_per_year(), cell_format)
-                sheet.write('G' + str(count), bond.get_years_before_maturity(), cell_format)
-                sheet.write('H' + str(count), bond.get_duration(), cell_format)
+                sheet.write('F' + str(count), bond.get_yield_to_maturity(), cell_format)
+                sheet.write('G' + str(count), bond.get_coupon_per_year(), cell_format)
+                sheet.write('H' + str(count), bond.get_years_before_maturity(), cell_format)
+                sheet.write('I' + str(count), bond.get_duration(), cell_format)
                 if sheet.get_name() == "Корпоративные":
-                    sheet.write('I' + str(count), bond.get_acra_rating(), cell_format)
-                    sheet.write('J' + str(count), bond.get_nra_rating(), cell_format)
-                    sheet.write('K' + str(count), bond.get_nkr_rating(), cell_format)
-                    sheet.write('L' + str(count), bond.get_tinkoff_risk(), cell_format)
-                    sheet.write('M' + str(count), bond.get_sector(), cell_format)
+                    sheet.write('J' + str(count), bond.get_acra_rating(), cell_format)
+                    sheet.write('K' + str(count), bond.get_nra_rating(), cell_format)
+                    sheet.write('L' + str(count), bond.get_nkr_rating(), cell_format)
+                    sheet.write('M' + str(count), bond.get_tinkoff_risk(), cell_format)
+                    sheet.write('N' + str(count), bond.get_sector(), cell_format)
                 count += 1
         except:
             pass
@@ -455,7 +470,7 @@ def open_output_table():
 
 def debugAPI(ticker):
     with Client(TOKEN) as client:
-        bonds = client.instruments.bond_by(id_type=2, class_code='TQIR', id=ticker)
+        bonds = client.instruments.bond_by(id_type=2, class_code='TQCB', id=ticker)
         print(bonds)
         print(client.market_data.get_last_prices(figi=["TCS00A105QL6"]).last_prices)
         # print(str(client.instruments.get_accrued_interests(figi="BBG00QXGFHS6", from_=datetime.today() , 
