@@ -279,7 +279,7 @@ def get_NRA_rating_by_isin(itn):
     if not os.path.exists(FILENAME_FOR_NRA_OUTPUT) or \
             datetime.fromtimestamp(os.path.getctime(FILENAME_FOR_NRA_OUTPUT)).day != datetime.now().day:
         r = requests.get("https://www.ra-national.ru/wp-load.php?security_key=100c906f36a0b90e&export_id=20&action"
-                         "=get_data")
+                         "=get_data", headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
         open(FILENAME_FOR_NRA_OUTPUT, 'wb').write(r.content)
 
     current_nra_rating_data_frame = pandas.read_excel(FILENAME_FOR_NRA_OUTPUT)
