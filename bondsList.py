@@ -230,6 +230,7 @@ def is_available_bond(bond) -> bool:
         and bond.currency == "rub"
         and bond.class_code != 'PSAU'
         and bond.coupon_quantity_per_year > 0
+        and bond.call_date.year == 1970
     )
 
 # ---- Модель строки для Excel (№10) ----
@@ -513,6 +514,7 @@ def main():
         all_rows = collect_bonds()
         gov_rows = []
         corp_rows = []
+        
         for r in all_rows:
             if r.Сектор == "Государственный" or r.Сектор == "Муниципальный":
                 # оставим логику «government» как отдельный лист; муниципальные можно считать к государственным
